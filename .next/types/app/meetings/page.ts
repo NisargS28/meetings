@@ -1,4 +1,4 @@
-// File: /Users/nisargpatel/Web Development/Project/mentor-mentee project/meetings/src/app/meetings/page.tsx
+// File: /workspaces/meetings/src/app/meetings/page.tsx
 import * as entry from '../../../../src/app/meetings/page.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 
