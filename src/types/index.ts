@@ -57,9 +57,11 @@ export interface Meeting extends Models.Document{
   status: 'scheduled' | 'ongoing' | 'completed' | 'cancelled';
   mentorId: string;
   mentorName: string;
-  // invitedStudents: InvitedStudent[]; //NISHU
-  invitedStudentIds: string[];
-  acceptedStudents: string[];
+  invitedStudents?: InvitedStudent[]; // Array of invited students with their response status
+  invitedStudentIds: string[]; // Array of student IDs who are invited
+  acceptedStudents: string[]; // Array of student IDs who accepted
+  rejectedStudents?: string[]; // Array of student IDs who rejected
+  rejectionReasons?: { [studentId: string]: string }; // Map of student ID to rejection reason
 }
 
 export interface InvitedStudent {
@@ -79,4 +81,27 @@ export interface MentorMenteeMapping {
   assignedMentorName: string;
   studentId: string;
   mentorId: string;
+}
+
+// Meeting Notification interface
+export interface MeetingNotification extends Models.Document {
+  id: string;
+  meetingId: string;
+  studentId: string;
+  studentName: string;
+  studentEmail: string;
+  mentorId: string;
+  mentorName: string;
+  meetingTitle: string;
+  meetingDescription: string;
+  meetingDate: string;
+  meetingTime: string;
+  duration: string;
+  meetingUrl: string;
+  meetingPassword?: string;
+  purpose: string;
+  status: 'pending' | 'accepted' | 'declined';
+  declineReason?: string;
+  createdAt: string;
+  updatedAt: string;
 }

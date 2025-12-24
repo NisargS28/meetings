@@ -4,7 +4,7 @@ import React from 'react';
 import { Meeting, InvitedStudent } from '@/types';
 import meetingsService from '@/backend-services/meetings';
 import { FiCalendar, FiClock, FiUsers, FiMoreVertical, FiTrash2, FiExternalLink } from 'react-icons/fi';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 
 interface MeetingsListProps {
     meetings: Meeting[];
@@ -56,14 +56,19 @@ const MeetingsList: React.FC<MeetingsListProps> = ({
 
     const getUpcomingMeetings = (): Meeting[] => {
         const now = new Date();
-        return meetings.filter(meeting => {
+        const upcoming = meetings.filter(meeting => {
             const meetingDate = new Date(`${meeting.date}T${meeting.time}`);
-            return meetingDate >= now && meeting.status === 'scheduled';
+            const isFuture = meetingDate >= now;
+            const isScheduled = meeting.status === 'scheduled';
+            console.log(`[getUpcomingMeetings] ${meeting.title}: date=${meeting.date}, time=${meeting.time}, isFuture=${isFuture}, status=${meeting.status}, isScheduled=${isScheduled}`);
+            return isFuture && isScheduled;
         }).sort((a, b) => {
             const dateA = new Date(`${a.date}T${a.time}`);
             const dateB = new Date(`${b.date}T${b.time}`);
             return dateA.getTime() - dateB.getTime();
         });
+        console.log(`[getUpcomingMeetings] Returning ${upcoming.length} upcoming meetings`);
+        return upcoming;
     };
 
     const getRejectedMeetings = (): Meeting[] => { // NISHU
@@ -82,6 +87,39 @@ const MeetingsList: React.FC<MeetingsListProps> = ({
     };
 
     const [studentCompletedMeetings, setStudentCompletedMeetings] = useState<Meeting[]>([])
+
+    // Use useMemo instead of useState + useEffect to avoid re-render flickering
+    const upcomingMeetingForStudents = useMemo(() => {
+        if (!isStudent) return [];
+        
+        const now = new Date();
+        const todayStr = now.toISOString().split("T")[0];
+        
+        const upcoming = meetings.filter(meeting => {
+            // Parse the date - handle both datetime string and date+time combination
+            let meetingDate;
+            if (meeting.date && meeting.date.includes('T')) {
+                // Date is already in full datetime format
+                meetingDate = new Date(meeting.date);
+            } else {
+                // Date and time are separate fields
+                meetingDate = new Date(`${meeting.date}T${meeting.time}`);
+            }
+            
+            const isFuture = meetingDate >= now;
+            const isScheduled = meeting.status === 'scheduled';
+            const meetingDateStr = meetingDate.toISOString().split("T")[0];
+            const isNotToday = meetingDateStr !== todayStr;
+            
+            return isFuture && isScheduled && isNotToday;
+        }).sort((a, b) => {
+            const dateA = a.date.includes('T') ? new Date(a.date) : new Date(`${a.date}T${a.time}`);
+            const dateB = b.date.includes('T') ? new Date(b.date) : new Date(`${b.date}T${b.time}`);
+            return dateA.getTime() - dateB.getTime();
+        });
+        
+        return upcoming;
+    }, [isStudent, meetings]);
 
     useEffect(() => {
 
@@ -130,59 +168,13 @@ const MeetingsList: React.FC<MeetingsListProps> = ({
         getCompletedMeetings();
     }, [isStudent]);
 
-    const [upcomingMeetingForStudents, setUpcomingMeetingForStudents] = useState<Meeting[]>([]);
-
-    
-    useEffect(() => {
-
-        const getUpcomingMeetingsForStudent = async () => {
-            if (!isStudent) return getUpcomingMeetings();
-            
-            try {
-                const studentId = "002"; // TODO: Get from auth/props
-                const response = await fetch(`/api/meetings/list?studentId=${studentId}`);
-                
-                if (!response.ok) {
-                    setUpcomingMeetingForStudents([]);
-                    return;
-                }
-
-                const data = await response.json();
-                const allMeetings: Meeting[] = data.documents || [];
-
-                const todayStr = new Date().toISOString().split("T")[0];
-                const meetingsWithStudent = allMeetings.filter((m) =>
-                    m.acceptedStudents.includes("002") && m.date !== todayStr
-                );
-
-                if (meetingsWithStudent.length === 0) {
-                    setUpcomingMeetingForStudents([]);
-                    return;
-                }
-
-                const latest = [meetingsWithStudent.reduce((latest, curr) => {
-                    const currDate = new Date(`${curr.date}T${curr.time}`);
-                    const latestDate = new Date(`${latest.date}T${latest.time}`);
-                    return currDate > latestDate ? curr : latest;
-                })];
-
-                setUpcomingMeetingForStudents(latest);
-            } catch (error) {
-                console.error("Error loading upcoming meetings:", error);
-                setUpcomingMeetingForStudents([]);
-            }
-        };
-
-        getUpcomingMeetingsForStudent();
-    }, [isStudent]);
-
 
     const renderMeetingCard = (meeting: Meeting) => {
-        const isSelected = selectedMeetingId === meeting.id;
-        const isDeleting = deletingMeeting === meeting.id;
+        const isSelected = selectedMeetingId === meeting.$id;
+        const isDeleting = deletingMeeting === meeting.$id;
         return (
             <div
-                key={meeting.id}
+                key={meeting.$id}
                 className={`relative group cursor-pointer transition-all duration-200 ${isSelected
                     ? 'bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800 shadow-md'
                     : 'bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800/50 border-gray-200/50 dark:border-gray-800/50'
@@ -237,14 +229,14 @@ const MeetingsList: React.FC<MeetingsListProps> = ({
                         <button
                             onClick={(e) => {
                                 e.stopPropagation();
-                                setShowMenuFor(showMenuFor === meeting.id ? null : meeting.id);
+                                setShowMenuFor(showMenuFor === meeting.$id ? null : meeting.$id);
                             }}
                             className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
                         >
                             <FiMoreVertical className="w-4 h-4 text-gray-400" />
                         </button>
 
-                        {showMenuFor === meeting.id && (
+                        {showMenuFor === meeting.$id && (
                             <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-900 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-50">
                                 <div className="py-1">
                                     <button
@@ -261,7 +253,7 @@ const MeetingsList: React.FC<MeetingsListProps> = ({
                                     <button
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            handleDeleteMeeting(meeting.id);
+                                            handleDeleteMeeting(meeting.$id);
                                         }}
                                         disabled={isDeleting}
                                         className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 disabled:opacity-50"
@@ -301,13 +293,13 @@ const MeetingsList: React.FC<MeetingsListProps> = ({
     };
 
     const renderRejectedMeetingCard = (meeting: Meeting) => {
-        const isSelected = selectedMeetingId === meeting.id;
+        const isSelected = selectedMeetingId === meeting.$id;
         const currentStudent = meeting.invitedStudents.find(s => s.responseStatus === 'declined');
         const declineReason = currentStudent?.declineReason || 'No reason provided';
 
         return (
             <div
-                key={meeting.id}
+                key={meeting.$id}
                 className={`relative group cursor-pointer transition-all duration-200 ${isSelected
                     ? 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800 shadow-md'
                     : 'bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800/50 border-gray-200/50 dark:border-gray-800/50'

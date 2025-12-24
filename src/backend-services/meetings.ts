@@ -32,7 +32,21 @@ class MeetingsService {
   }
 
   async getMeetingsByStudentId(studentId: string): Promise<Meeting[]> {
-    return [] as Meeting[];
+    try {
+      // Fetch meetings where student is in invitedStudentIds (for all meetings involving the student)
+      const response = await fetch(`/api/meetings/invitations?studentId=${studentId}`);
+      
+      if (!response.ok) {
+        console.error('Failed to fetch student meetings:', response.status);
+        return [];
+      }
+      
+      const { documents } = await response.json();
+      return documents || [];
+    } catch (error) {
+      console.error('Error fetching student meetings:', error);
+      return [];
+    }
   }
 
   async getMeetingById(meetingId: string): Promise<Meeting | null> {

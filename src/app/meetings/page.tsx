@@ -21,8 +21,8 @@ interface MeetingsPageError extends Error {
 }
 
 const MeetingsPage: React.FC = () => {
-    const user = { type: "Student", userId: "1", name: "Test Student" };
-    // const user = { type: "Faculty", userId: "1", name: "Test Faculty" };
+    const user = { type: "Student", userId: "001", name: "Test Student" };
+    //const user = { type: "Faculty", userId: "1", name: "Test Faculty" };
 
     const [meetings, setMeetings] = useState<Meeting[]>([]);
     const [loading, setLoading] = useState(true);
@@ -65,7 +65,19 @@ const MeetingsPage: React.FC = () => {
                 if (isFaculty) {
                     data = await meetingsService.getMeetingsByMentorId(user.userId);
                 } else {
-                    data = await meetingsService.getMeetingsByStudentId(user.userId);
+                    // For students, get all meetings and filter to only accepted ones
+                    const allMeetings = await meetingsService.getMeetingsByStudentId(user.userId);
+                    console.log('All meetings fetched for student:', allMeetings.length);
+                    console.log('Meetings data:', allMeetings);
+                    
+                    // Only show meetings where the student has accepted the invitation
+                    data = allMeetings.filter(meeting => {
+                        const isAccepted = meeting.acceptedStudents?.includes(user.userId);
+                        console.log(`Meeting ${meeting.$id}: acceptedStudents:`, meeting.acceptedStudents, 'isAccepted:', isAccepted);
+                        return isAccepted;
+                    });
+                    
+                    console.log('Filtered accepted meetings:', data.length);
                 }
                 setMeetings(data);
             } catch (error) {
@@ -227,6 +239,7 @@ const MeetingsPage: React.FC = () => {
                             {/* Meetings Tab NISHU*/} 
                             {(isFaculty || (isStudent && activeTab === "meetings")) && (
                                 <>
+                                {console.log('Rendering My Meetings tab with', meetings.length, 'meetings')}
                                 <div>
                                     <TodayMeeting meetings={meetings}
                                             selectedMeetingId={selectedMeeting?.id}
