@@ -5,65 +5,6 @@ import { Meeting, InvitedStudent } from '@/types';
 import meetingsService from '@/backend-services/meetings';
 import { FiCalendar, FiClock, FiUsers, FiMoreVertical, FiTrash2, FiExternalLink } from 'react-icons/fi';
 import { useState, useEffect } from 'react';
-import { Client, Databases, Query } from "appwrite";
-const client = new Client();
-
-client
-    .setEndpoint("https://fra.cloud.appwrite.io/v1") // Replace with your Appwrite endpoint
-    .setProject("693c4a0500373e4da394");
-// Replace with your Project ID
-
-const databases = new Databases(client);
-
-const meetingDocument = {
-    title: "Project Kickoff",
-    description: "Initial project discussion",
-    date: "2025-12-20",
-    time: "10:00",
-    duration: "60",
-    meetingUrl: "https://zoom.us/j/123456789",
-    meetingPassword: "abcd1234",
-    purpose: "Discuss project milestones",
-    status: "scheduled",
-    mentorId: "mentor_001",
-    mentorName: "Dr. Hiren",
-    invitedStudents: [
-        JSON.stringify({
-            studentId: "001",
-            studentName: "Nisarg Patel",
-            studentEmail: "nisarg@example.com",
-            rollNo: "24bcp065",
-            responseStatus: "pending"
-        }),
-        JSON.stringify({
-            studentId: "002",
-            studentName: "Alice Smith",
-            studentEmail: "alice@example.com",
-            rollNo: "24bcp066",
-            responseStatus: "accepted",
-            joinedAt: "2025-12-14T10:05:00Z"
-        })
-    ],
-    invitedStudentIds: ["001", "002"]
-};
-
-
-async function createMeeting() {
-    try {
-        const result = await databases.createDocument(
-            "693d93a9002274b333f4",       // Replace with your database ID
-            "mentor_meetings", // Replace with your collection ID
-            "unique()",                 // Auto-generate a unique document ID
-            meetingDocument
-        );
-
-        console.log("Document inserted successfully:", result);
-    } catch (error) {
-        console.error("Error inserting document:", error);
-    }
-}
-
-// createMeeting();
 
 interface MeetingsListProps {
     meetings: Meeting[];
@@ -144,40 +85,46 @@ const MeetingsList: React.FC<MeetingsListProps> = ({
 
     useEffect(() => {
 
-        const getCompletedMeetings = async (): Promise<void> => { // NISHU
-            let meeting = await databases.listDocuments<Meeting>(
-                "693d93a9002274b333f4",
-                "mentor_meetings",
-            )
+        const getCompletedMeetings = async (): Promise<void> => {
+            try {
+                const studentId = "002"; // TODO: Get from auth/props
+                const response = await fetch(`/api/meetings/list?studentId=${studentId}`);
+                
+                if (!response.ok) {
+                    setStudentCompletedMeetings([]);
+                    return;
+                }
 
-            const now = new Date();
-            const completedMeets =
-                meeting.documents.filter(meeting => {
+                const data = await response.json();
+                const allMeetings: Meeting[] = data.documents || [];
+
+                const now = new Date();
+                const completedMeets = allMeetings.filter(meeting => {
                     if (isStudent) {
                         // For students, only show meetings they attended (accepted and completed)
-                        const currentStudent = meeting.acceptedStudents.includes("002"
-                        );
+                        const currentStudent = meeting.acceptedStudents.includes("002");
                         return currentStudent && (meeting.status === 'completed');
-                            // (new Date(`${meeting.date}`) < now && meeting.status === 'scheduled'));
-                        // (new Date(`${meeting.date}T${meeting.time}`) < now && meeting.status === 'scheduled'));
                     } else {
                         // For faculty, show all past meetings
                         const meetingDate = new Date(`${meeting.date}`);
                         return meetingDate < now || meeting.status === 'completed';
                     }
-                })
+                });
 
-            const mostRecentCompletedMeeting =
-                completedMeets.length > 0
-                    ? completedMeets.reduce((latest, current) => {
-                        const latestTime = new Date(`${latest.date}T${latest.time}`).getTime();
-                        const currentTime = new Date(`${current.date}T${current.time}`).getTime();
-                        return currentTime > latestTime ? current : latest;
-                    })
-                    : null;
+                const mostRecentCompletedMeeting =
+                    completedMeets.length > 0
+                        ? completedMeets.reduce((latest, current) => {
+                            const latestTime = new Date(`${latest.date}T${latest.time}`).getTime();
+                            const currentTime = new Date(`${current.date}T${current.time}`).getTime();
+                            return currentTime > latestTime ? current : latest;
+                        })
+                        : null;
 
-            // console.log("Completed Meets : ", mostRecentCompletedMeeting);
-            setStudentCompletedMeetings(mostRecentCompletedMeeting ? [mostRecentCompletedMeeting]: []);
+                setStudentCompletedMeetings(mostRecentCompletedMeeting ? [mostRecentCompletedMeeting] : []);
+            } catch (error) {
+                console.error("Error loading completed meetings:", error);
+                setStudentCompletedMeetings([]);
+            }
         };
 
         getCompletedMeetings();
@@ -188,32 +135,42 @@ const MeetingsList: React.FC<MeetingsListProps> = ({
     
     useEffect(() => {
 
-        const getUpcomingMeetingsForStudent = async () => { //NISHU
+        const getUpcomingMeetingsForStudent = async () => {
             if (!isStudent) return getUpcomingMeetings();
-            let meeting = await databases.listDocuments<Meeting>(
-                "693d93a9002274b333f4",
-                "mentor_meetings",
-            )
+            
+            try {
+                const studentId = "002"; // TODO: Get from auth/props
+                const response = await fetch(`/api/meetings/list?studentId=${studentId}`);
+                
+                if (!response.ok) {
+                    setUpcomingMeetingForStudents([]);
+                    return;
+                }
 
-            // const finalRes = res.filter((m) => m.mentorId === "mentor_001");
-            const now = new Date();
-            const todayStr = new Date().toISOString().split("T")[0];
+                const data = await response.json();
+                const allMeetings: Meeting[] = data.documents || [];
 
-            const meetingsWithStudent = meeting.documents.filter((m) =>
-                m.acceptedStudents.includes("002") && m.date !== todayStr
-            );
+                const todayStr = new Date().toISOString().split("T")[0];
+                const meetingsWithStudent = allMeetings.filter((m) =>
+                    m.acceptedStudents.includes("002") && m.date !== todayStr
+                );
 
-            console.log("xyz : ", meetingsWithStudent);
+                if (meetingsWithStudent.length === 0) {
+                    setUpcomingMeetingForStudents([]);
+                    return;
+                }
 
-            const latest = [meetingsWithStudent.reduce((latest, curr) => {
-                const currDate = new Date(`${curr.date}T${curr.time}`);
-                const latestDate = new Date(`${latest.date}T${latest.time}`);
-                return currDate > latestDate ? curr : latest;
-            })];
+                const latest = [meetingsWithStudent.reduce((latest, curr) => {
+                    const currDate = new Date(`${curr.date}T${curr.time}`);
+                    const latestDate = new Date(`${latest.date}T${latest.time}`);
+                    return currDate > latestDate ? curr : latest;
+                })];
 
-            // console.log("latest Meets : ", latest);
-
-            setUpcomingMeetingForStudents(latest);
+                setUpcomingMeetingForStudents(latest);
+            } catch (error) {
+                console.error("Error loading upcoming meetings:", error);
+                setUpcomingMeetingForStudents([]);
+            }
         };
 
         getUpcomingMeetingsForStudent();
