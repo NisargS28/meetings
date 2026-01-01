@@ -5,6 +5,8 @@ export async function POST(request: NextRequest) {
     try {
         const { meetingId, studentId } = await request.json();
 
+        console.log('Accept meeting request:', { meetingId, studentId, studentIdType: typeof studentId });
+
         if (!meetingId || !studentId) {
             return NextResponse.json(
                 { error: 'Missing meetingId or studentId' },
@@ -23,12 +25,26 @@ export async function POST(request: NextRequest) {
 
         // Get the current meeting
         const meeting = await databases.getDocument(dbId, collectionId, meetingId);
+        
+        console.log('Current meeting acceptedStudents:', meeting.acceptedStudents);
 
         // Add student to acceptedStudents array if not already present
-        const acceptedStudents = meeting.acceptedStudents || [];
-        if (!acceptedStudents.includes(studentId)) {
+        // Ensure we handle null, undefined, or non-array values properly
+        let acceptedStudents: string[] = [];
+        
+        if (Array.isArray(meeting.acceptedStudents)) {
+            // Filter out any null, undefined, or empty values that might exist
+            acceptedStudents = meeting.acceptedStudents.filter(
+                (id: any) => id !== null && id !== undefined && id !== ''
+            );
+        }
+        
+        // Only add if student ID is valid and not already in the array
+        if (studentId && !acceptedStudents.includes(studentId)) {
             acceptedStudents.push(studentId);
         }
+
+        console.log('Updated acceptedStudents array:', acceptedStudents);
 
         // Update the meeting document
         const updatedMeeting = await databases.updateDocument(
@@ -36,9 +52,11 @@ export async function POST(request: NextRequest) {
             collectionId,
             meetingId,
             {
-                acceptedStudents
+                acceptedStudents: acceptedStudents
             }
         );
+
+        console.log('Meeting updated successfully. New acceptedStudents:', updatedMeeting.acceptedStudents);
 
         return NextResponse.json({
             success: true,
